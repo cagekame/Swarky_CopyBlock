@@ -500,7 +500,7 @@ class _UIPhase:
     def __exit__(self, exc_type, exc, tb):
         elapsed_ms = int((time.perf_counter() - self.t0) * 1000)
         logging.info(f"{self.label} finita in {elapsed_ms} ms",
-                     extra={"ui": ("phase_done", elapsed_ms)})
+                     extra={"ui": ("phase_done", self.label, elapsed_ms)})
         return False
 
 def ui_phase(label: str) -> _UIPhase:
