@@ -827,8 +827,10 @@ def iss_loading(cfg: Config) -> bool:
             log_error(cfg, p.name, "Nome ISS Errato")
             continue
         try:
-            move_to(p, cfg.PLM_DIR)
-            write_edi(cfg, file_name=p.name, out_dir=cfg.PLM_DIR, iss_match=m)
+            with ui_phase(f"{p.name} • ISS move_to_PLM"):
+                move_to(p, cfg.PLM_DIR)
+            with ui_phase(f"{p.name} • ISS write_EDI"):
+                write_edi(cfg, file_name=p.name, out_dir=cfg.PLM_DIR, iss_match=m)
             log_swarky(cfg, p.name, "ISS", "ISS", "", "")
             did = True
         except Exception as e:
@@ -859,10 +861,13 @@ def fiv_loading(cfg: Config) -> bool:
         if not m:
             log_error(cfg, p.name, "Nome FIV Errato")
             continue
-        loc = map_location(m, cfg)
         try:
-            write_edi(cfg, m=m, file_name=p.name, loc=loc, out_dir=cfg.PLM_DIR)
-            move_to(p, cfg.PLM_DIR)
+            with ui_phase(f"{p.name} • FIV map_location"):
+                loc = map_location(m, cfg)
+            with ui_phase(f"{p.name} • FIV write_EDI"):
+                write_edi(cfg, m=m, file_name=p.name, loc=loc, out_dir=cfg.PLM_DIR)
+            with ui_phase(f"{p.name} • FIV move_to_PLM"):
+                move_to(p, cfg.PLM_DIR)
             log_swarky(cfg, p.name, "FIV", "FIV loading", "", "")
             did = True
         except Exception as e:
