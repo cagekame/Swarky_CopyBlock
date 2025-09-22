@@ -646,15 +646,39 @@ class SwarkyApp:
         except Exception:
             pass
 
-    def _phase_end(self, final_text: str | None = None) -> None:
-        """Ferma il timer fase e mostra eventualmente un testo finale."""
+    def _phase_end(
+        self,
+        final_text: str | None = None,
+        *,
+        elapsed_ms: int | None = None,
+        phase_label: str | None = None,
+    ) -> None:
+        """Ferma il timer fase e mostra eventualmente un testo finale con ms."""
         try:
             if hasattr(self, "_phase_tick_id") and self._phase_tick_id:
                 self.root.after_cancel(self._phase_tick_id)
                 self._phase_tick_id = None
         except Exception:
             pass
-        self.phase_var.set(final_text or "Pronto.")
+        if elapsed_ms is None and hasattr(self, "_phase_t0"):
+            try:
+                elapsed_ms = int((time.perf_counter() - self._phase_t0) * 1000)
+            except Exception:
+                elapsed_ms = None
+
+        display = final_text
+        if display is None:
+            base = phase_label or getattr(self, "_phase_text", None)
+            if base and elapsed_ms is not None:
+                display = f"{base} • {elapsed_ms} ms"
+            elif base:
+                display = base
+            elif elapsed_ms is not None:
+                display = f"Completato • {elapsed_ms} ms"
+            else:
+                display = "Pronto."
+
+        self.phase_var.set(display)
         for attr in ("_phase_t0", "_phase_text"):
             if hasattr(self, attr):
                 delattr(self, attr)
@@ -969,19 +993,21 @@ class _TreeviewHandler(logging.Handler):
             self.app.root.after(0, lambda: self.app._phase_start(phase_text))
 
         elif kind in ("phase_end", "phase_done"):
-            # ui ("phase_end", "Testo finale?")  oppure ("phase_done", elapsed_ms)
+            # ui ("phase_end", "Testo finale?") oppure ("phase_done", label, elapsed_ms)
             def _end():
                 final_text = None
+                elapsed_ms = None
+                phase_label = None
                 if kind == "phase_end":
                     final_text = ui[1] if len(ui) > 1 else None
                 elif kind == "phase_done":
-                    try:
-                        elapsed_ms = int(ui[1]) if len(ui) > 1 else None
-                        if elapsed_ms is not None:
-                            final_text = f"Completato • {elapsed_ms} ms"
-                    except Exception:
-                        final_text = None
-                self.app._phase_end(final_text)
+                    phase_label = ui[1] if len(ui) > 1 else None
+                    if len(ui) > 2:
+                        try:
+                            elapsed_ms = int(ui[2])
+                        except Exception:
+                            elapsed_ms = None
+                self.app._phase_end(final_text, elapsed_ms=elapsed_ms, phase_label=phase_label)
             self.app.root.after(0, _end)
 
 def main() -> None:
