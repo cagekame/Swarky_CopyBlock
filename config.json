@@ -1,0 +1,20 @@
+{
+  "paths": {
+    "hplotter": "\\\\desctgw1\\comune\\plotter",
+    "archivio": "\\\\desctgw1\\disegni\\archivio_disegni",
+    "error_dir": "\\\\desctgw1\\comune\\plotter\\Rivedere",
+    "pari_rev": "\\\\desctgw1\\comune\\plotter\\Pari_ Revisione",
+    "plm": "\\\\AZCESTFSP01\\Desio$\\",
+    "storico": "\\\\desctgw1\\Archivio_Storico\\",
+    "iss": "\\\\desctgw1\\comune\\plotter\\ISS",
+    "fiv": "\\\\desctgw1\\comune\\plotter\\FIVloading",
+    "heng": "\\\\desctgw1\\comune\\plotter\\Hengelo",
+    "error_plm": "\\\\AZCESTFSP01\\Desio$\\Errors",
+    "tab": "\\\\desctgw1\\comune\\plotter\\Tabellari",
+    "log_dir": null
+  },
+  "AUTO_TIME": "17:00",
+  "LOG_LEVEL": "INFO",
+  "ACCEPT_PDF": false,
+  "LOG_PHASES": false
+}
