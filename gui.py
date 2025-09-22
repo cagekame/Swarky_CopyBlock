@@ -9,7 +9,6 @@ import json
 import logging
 import threading
 import os, sys, subprocess
-import tkinter.simpledialog as simpledialog
 import time
 from pathlib import Path
 from datetime import datetime, time as dt_time, timedelta
@@ -108,61 +107,17 @@ class SwarkyApp:
         
     # ---------------- Tabellari ----------------
     def open_tabellari(self) -> None:
-        """
-        1) Chiede 'Numero Disegno' (es: DXX123456)
-        2) Chiede 'Quante posizioni vuoi inserire?' (es: 7)
-        3) Genera un TXT in DIR_TABELLARI con una singola riga:
-           DXX12345601,DXX12345602, ...
-        """
         try:
-            # --- Input 1: prefisso ---
-            prefix = simpledialog.askstring(
-                "Tabellari", "Inserisci Numero Disegno:", parent=self.root
-            )
-            if prefix is None:  # annulla
+            if getattr(self, "_tabellari_win", None) and self._tabellari_win.winfo_exists():
+                self._tabellari_win.focus_set()
                 return
-            prefix = prefix.strip().upper()
+        except Exception:
+            pass
 
-            # Validazione semplice: D + 2 lettere + 6 cifre
-            import re
-            if not re.fullmatch(r"D[A-Z]{2}\d{6}", prefix):
-                messagebox.showerror("Tabellari", "Formato non valido.\nAtteso: D + due lettere + 6 cifre.")
-                return
-
-            # --- Input 2: numero posizioni ---
-            n_str = simpledialog.askstring(
-                "Tabellari", "Quante posizioni vuoi inserire?", parent=self.root
-            )
-            if n_str is None:
-                return
-            n_str = n_str.strip()
-            if not n_str.isdigit():
-                messagebox.showerror("Tabellari", "Inserisci un numero intero valido.")
-                return
-
-            n = int(n_str)
-            if n <= 0 or n > 99:
-                messagebox.showerror("Tabellari", "Il numero deve essere tra 1 e 99.")
-                return
-
-            # --- Generazione stringhe: 01..NN a 2 cifre ---
-            items = [f"{prefix}{i:02d}" for i in range(1, n + 1)]
-            line = ",".join(items) + "\n"
-
-            # --- Scrittura file ---
-            out_dir = self.cfg.DIR_TABELLARI
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / f"{prefix}_tabellari.txt"
-
-            with out_path.open("w", encoding="utf-8") as f:
-                f.write(line)
-
-            messagebox.showinfo("Tabellari", f"File creato:\n{out_path}")
-            # opzionale: apri la cartella
-            # _open_path(out_dir)
-
+        try:
+            self._tabellari_win = TabellariDialog(self)
         except Exception as e:
-            logging.exception("Errore Tabellari")
+            logging.exception("Errore apertura Tabellari")
             messagebox.showerror("Tabellari", f"Errore imprevisto:\n{e}")
                 
     # ---------------- CONFIG (solo JSON) ----------------
@@ -729,6 +684,107 @@ class SwarkyApp:
         self.root.mainloop()
 
 
+class TabellariDialog(tk.Toplevel):
+    def __init__(self, app: SwarkyApp):
+        super().__init__(app.root)
+        self.app = app
+        self.title("Tabellari")
+        self.configure(bg=LIGHT_BG)
+        self.resizable(False, False)
+        self.transient(app.root)
+        self.grab_set()
+
+        self.prefix_var = tk.StringVar()
+        self.count_var = tk.StringVar()
+
+        frm = ttk.Frame(self)
+        frm.pack(fill="both", expand=True, padx=12, pady=12)
+
+        ttk.Label(frm, text="Numero Disegno (DXX123456):").grid(row=0, column=0, sticky="w")
+        prefix_entry = ttk.Entry(frm, textvariable=self.prefix_var, width=32)
+        prefix_entry.grid(row=1, column=0, sticky="ew", pady=(4, 12))
+
+        ttk.Label(frm, text="Numero di posizioni (1-99):").grid(row=2, column=0, sticky="w")
+        count_entry = ttk.Entry(frm, textvariable=self.count_var, width=8)
+        count_entry.grid(row=3, column=0, sticky="w", pady=(4, 12))
+
+        btns = ttk.Frame(frm)
+        btns.grid(row=4, column=0, sticky="e")
+        ttk.Button(btns, text="Annulla", command=self.destroy).pack(side="right", padx=(6, 0))
+        ttk.Button(btns, text="Genera", command=self._generate).pack(side="right")
+
+        frm.columnconfigure(0, weight=1)
+
+        self.bind("<Return>", self._generate)
+        self.bind("<Escape>", lambda _evt: self.destroy())
+
+        prefix_entry.focus_set()
+
+        self.update_idletasks()
+        self.minsize(self.winfo_width(), self.winfo_height())
+        self._center_on_parent()
+
+    def _center_on_parent(self) -> None:
+        try:
+            self.update_idletasks()
+            parent = self.master or self.app.root
+            if not parent:
+                return
+            try:
+                parent.update_idletasks()
+            except Exception:
+                pass
+            px, py = parent.winfo_rootx(), parent.winfo_rooty()
+            pw, ph = parent.winfo_width(), parent.winfo_height()
+            w, h = self.winfo_width(), self.winfo_height()
+            if pw <= 0 or ph <= 0:
+                self.geometry(f"+{px + 40}+{py + 40}")
+                return
+            x = px + (pw - w) // 2
+            y = py + (ph - h) // 2
+            self.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+    def _generate(self, _evt=None) -> None:
+        prefix = (self.prefix_var.get() or "").strip().upper()
+        if not prefix:
+            messagebox.showerror("Tabellari", "Inserisci il Numero Disegno.")
+            return
+
+        import re
+
+        if not re.fullmatch(r"D[A-Z]{2}\d{6}", prefix):
+            messagebox.showerror("Tabellari", "Formato non valido.\nAtteso: D + due lettere + 6 cifre.")
+            return
+
+        n_str = (self.count_var.get() or "").strip()
+        if not n_str.isdigit():
+            messagebox.showerror("Tabellari", "Inserisci un numero intero valido.")
+            return
+
+        n = int(n_str)
+        if n <= 0 or n > 99:
+            messagebox.showerror("Tabellari", "Il numero deve essere tra 1 e 99.")
+            return
+
+        items = [f"{prefix}{i:02d}" for i in range(1, n + 1)]
+        line = ",".join(items) + "\n"
+
+        try:
+            out_dir = self.app.cfg.DIR_TABELLARI
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{prefix}_tabellari.txt"
+            out_path.write_text(line, encoding="utf-8")
+        except Exception as e:
+            logging.exception("Errore Tabellari")
+            messagebox.showerror("Tabellari", f"Errore imprevisto:\n{e}")
+            return
+
+        messagebox.showinfo("Tabellari", f"File creato:\n{out_path}")
+        self.destroy()
+
+
 class SettingsDialog(tk.Toplevel):
     """Impostazioni: paths + AUTO_TIME (HH:MM) + ACCEPT_PDF."""
     PATH_FIELDS = [
@@ -751,7 +807,7 @@ class SettingsDialog(tk.Toplevel):
         self.app = app
         self.title("Settings")
         self.configure(bg=LIGHT_BG)
-        self.resizable(False, True)
+        self.resizable(False, False)
         self.grab_set()
 
         self.vars: Dict[str, tk.StringVar] = {}
@@ -789,6 +845,9 @@ class SettingsDialog(tk.Toplevel):
         ttk.Button(btns, text="Salva", command=self._save).pack(side="right")
 
         frm.columnconfigure(1, weight=1)
+
+        self.update_idletasks()
+        self.minsize(self.winfo_width(), self.winfo_height())
 
     def _load_config_dict(self):
         data = {}
