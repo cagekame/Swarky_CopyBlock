@@ -3,7 +3,7 @@ from __future__ import annotations
 import os, sys, subprocess, shutil
 from pathlib import Path
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 from Swarky import BASE_NAME, map_location, _docno_from_match
 
 LIGHT_BG = "#eef3f9"
@@ -65,13 +65,13 @@ class PariRevWindow(tk.Toplevel):
 
         tk.Label(right, text="Azioni", bg=LIGHT_BG).grid(row=0, column=0, sticky="w", pady=LABEL_PADY)
 
-        btns = tk.Frame(right, bg=LIGHT_BG)
+        btns = ttk.Frame(right)
         btns.grid(row=1, column=0, sticky="nsew")
 
-        self.btn_sr_go     = tk.Button(btns, text="Start Process",  width=BTN_W, command=self._start_process_worker)
-        self.btn_getnumber = tk.Button(btns, text="Get Number",     width=BTN_W, command=self._not_implemented)
-        self.btn_goto      = tk.Button(btns, text="GoTo Folder",    width=BTN_W, command=self._goto_dest_folder)
-        self.btn_srdir     = tk.Button(btns, text="Goto Sr Folder", width=BTN_W, command=self._goto_sr_folder)
+        self.btn_sr_go     = ttk.Button(btns, text="Start Process",  width=BTN_W, command=self._start_process_worker)
+        self.btn_getnumber = ttk.Button(btns, text="Get Number",     width=BTN_W, command=self._not_implemented)
+        self.btn_goto      = ttk.Button(btns, text="GoTo Folder",    width=BTN_W, command=self._goto_dest_folder)
+        self.btn_srdir     = ttk.Button(btns, text="Goto Sr Folder", width=BTN_W, command=self._goto_sr_folder)
 
         for i, b in enumerate((self.btn_sr_go, self.btn_getnumber, self.btn_goto, self.btn_srdir)):
             pady = (0,3) if i == 0 else (3,0) if i == 3 else 3
