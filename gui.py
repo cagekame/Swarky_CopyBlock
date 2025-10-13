@@ -304,14 +304,18 @@ class SwarkyApp:
         ttk.Button(self.controls, text="Tabellari", command=self.open_tabellari).pack(side="left", padx=4)
         ttk.Button(self.controls, text="Settings", command=self.open_settings).pack(side="left", padx=4)
 
+        # Label stato fasi (subito a destra di Settings)
+        self.phase_var = tk.StringVar(value="Pronto.")
+        self.phase_label = ttk.Label(self.controls, textvariable=self.phase_var, width=48, anchor="w")
+        self.phase_label.pack(side="left", padx=(8, 0))
+
+        # Spacer elastico per spingere l'orologio all'estrema destra
+        self._controls_spacer = ttk.Frame(self.controls)
+        self._controls_spacer.pack(side="left", fill="x", expand=True)
+
         # Orologio (larghezza fissa: "dd/mm/yyyy hh:mm:ss" = 19 char)
         self.clock_label = ttk.Label(self.controls, width=19, anchor="e")
         self.clock_label.pack(side="right", padx=5)
-
-        # Label stato fasi (fase + ms) con larghezza fissa
-        self.phase_var = tk.StringVar(value="Pronto.")
-        self.phase_label = ttk.Label(self.controls, textvariable=self.phase_var, width=36, anchor="e")
-        self.phase_label.pack(side="right", padx=8)
 
         # Logging → GUI
         self.tree_handler = _TreeviewHandler(self)
