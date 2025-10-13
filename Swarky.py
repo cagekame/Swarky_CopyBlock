@@ -240,6 +240,15 @@ def _list_same_doc_prefisso(dirp: Path, m: re.Match) -> list[tuple[str, str, str
         return []
     names = tuple(nm for nm in names_all if nm.lower().endswith((".tif", ".pdf")))
     return _parse_prefixed(names)
+    
+def _list_nonstandard_same_doc(dirp: Path, m: re.Match) -> list[str]:
+    """Ritorna i nomi file con stesso DOCNO ma NON conformi a BASE_NAME."""
+    docno = _docno_from_match(m)
+    names_all = _win_find_names_ex(dirp, f"{docno}*")
+    if not names_all:
+        return []
+    names = [nm for nm in names_all if nm.lower().endswith((".tif", ".pdf"))]
+    return [nm for nm in names if BASE_NAME.fullmatch(nm) is None]
 
 # ---- LOGGING -------------------------------------------------------------------------
 
@@ -379,14 +388,16 @@ LOCATION_MAP = {
 DEFAULT_LOCATION = ("unknown", "Unknown", "m", "Customer Drawings", "English")
 
 def map_location(m: re.Match, cfg: Config) -> dict:
-    first = m.group(3)[0]
-    l2 = m.group(2).upper()
+    first = m.group(3)[0]          # prima cifra delle 6
+    l2 = m.group(2).upper()        # lettera location
+
     loc = (
         LOCATION_MAP.get((l2, first))
-        or LOCATION_MAP.get((l2, "*"))
         or LOCATION_MAP.get(("*", first))
+        or LOCATION_MAP.get((l2, "*"))
         or DEFAULT_LOCATION
     )
+
     folder, log_name, subloc, doctype, lang = loc
     arch_tif_loc = m.group(1).upper() + subloc
     dir_tif_loc = cfg.ARCHIVIO_DISEGNI / folder / arch_tif_loc
@@ -640,14 +651,14 @@ def _process_candidate(p: Path, cfg: Config) -> bool:
         name = p.name
 
         # ---- ORIENTAMENTO: subito in testa ----
-        with ui_phase(f"{name} • orientamento"):
+        with ui_phase(f"{name} • Verse"):
             if not check_orientation_ok(p):
                 log_error(cfg, name, "Immagine Girata")
                 move_to(p, cfg.ERROR_DIR)
                 return True
 
         # ---- Regex + validazioni ----
-        with ui_phase(f"{name} • regex+validate"):
+        with ui_phase(f"{name} • RE_Validate"):
             m = BASE_NAME.fullmatch(name)
             if not m:
                 log_error(cfg, name, "Nome File Errato"); move_to(p, cfg.ERROR_DIR); return True
@@ -666,20 +677,20 @@ def _process_candidate(p: Path, cfg: Config) -> bool:
         new_rev_i = int(new_rev)
 
         # ---- Mappatura destinazione archivio ----
-        with ui_phase(f"{name} • map_location"):
+        with ui_phase(f"{name} • Map_Loc"):
             loc = map_location(m, cfg)
             dir_tif_loc = loc["dir_tif_loc"]
             tiflog      = loc["log_name"]
 
         # ---- Elenco file con stesso DOCNO ----
-        with ui_phase(f"{name} • list_same_doc_prefisso"):
+        with ui_phase(f"{name} • Prefisso"):
             same_doc = _list_same_doc_prefisso(dir_tif_loc, m)
 
-        with ui_phase(f"{name} • derive_same_sheet"):
+        with ui_phase(f"{name} • Sheet"):
             same_sheet = [(r, nm, met, sh) for (r, nm, met, sh) in same_doc if sh == new_sheet]
 
         # ---- Pari revisione (verifica via lista) ----
-        with ui_phase(f"{name} • check_same_filename"):
+        with ui_phase(f"{name} • Filename"):
             if any((nm == name and r == new_rev) for (r, nm, met, sh) in same_sheet):
                 log_error(cfg, name, "Pari Revisione")
                 move_to(p, cfg.PARI_REV_DIR)
@@ -739,9 +750,32 @@ def _process_candidate(p: Path, cfg: Config) -> bool:
                 return True
 
         # ---- ACCETTAZIONE del NUOVO ----
-        with ui_phase(f"{name} • move_to_archivio"):
+        with ui_phase(f"{name} • Archivio"):
             move_to(p, dir_tif_loc)
             new_path = dir_tif_loc / name
+            
+        # ---- LEGACY/NON STANDARD → STORICO (igiene archivio) ----
+        with ui_phase(f"{name} • Non_Std_Legacy"):
+            legacy = _list_nonstandard_same_doc(dir_tif_loc, m)
+            for nm in legacy:
+                old_path = dir_tif_loc / nm
+                dest_dir = _storico_dest_dir_for_name(cfg, nm)
+                try:
+                    copied, rc = move_to_storico_safe(old_path, dest_dir)
+                    if rc >= 8:
+                        logging.exception("Storico (legacy) errore: %s → %s", old_path, dest_dir)
+                    elif copied:
+                        # log “positivo” coerente con il resto
+                        log_swarky(cfg, name, tiflog, "Legacy non standard", nm, "Storico")
+                    else:
+                        # già presente nello Storico → manda l’originale in ERROR_DIR
+                        log_error(cfg, nm, "Presente in Storico")
+                        try:
+                            move_to(old_path, cfg.ERROR_DIR)
+                        except FileNotFoundError:
+                            pass
+                except Exception as e:
+                    logging.exception("Storico (legacy): %s → %s: %s", old_path, dest_dir, e)
 
         # ---- STORICIZZAZIONI (dopo l'accettazione) ----
         to_storico_same: list[tuple[Path, Path, str]] = []
@@ -756,7 +790,7 @@ def _process_candidate(p: Path, cfg: Config) -> bool:
                     to_storico_other.append((dir_tif_loc / nm, _storico_dest_dir_for_name(cfg, nm), nm))
 
         if to_storico_same:
-            with ui_phase(f"{name} • move_old_revs_same_metric"):
+            with ui_phase(f"{name} • Move_Same_Sheet"):
                 for old_path, dest_dir, nm in to_storico_same:
                     try:
                         copied, rc = move_to_storico_safe(old_path, dest_dir)
@@ -774,7 +808,7 @@ def _process_candidate(p: Path, cfg: Config) -> bool:
                         logging.exception("Storico (same metric): %s → %s: %s", old_path, dest_dir, e)
 
         if to_storico_other:
-            with ui_phase(f"{name} • move_old_revs_other_group"):
+            with ui_phase(f"{name} • Move_other"):
                 for old_path, dest_dir, nm in to_storico_other:
                     try:
                         copied, rc = move_to_storico_safe(old_path, dest_dir)
@@ -792,13 +826,13 @@ def _process_candidate(p: Path, cfg: Config) -> bool:
                         logging.exception("Storico (other grp): %s → %s: %s", old_path, dest_dir, e)
 
         # ---- PLM + EDI ----
-        with ui_phase(f"{name} • link/copy_to_PLM"):
+        with ui_phase(f"{name} • To_PLM"):
             try:
                 _fast_copy_or_link(new_path, cfg.PLM_DIR / name, overwrite=True)
             except Exception as e:
                 logging.exception("PLM copy/link fallita per %s: %s", new_path, e)
 
-        with ui_phase(f"{name} • write_EDI"):
+        with ui_phase(f"{name} • Write_EDI"):
             try:
                 write_edi(cfg, name, cfg.PLM_DIR, m=m, loc=loc)
             except Exception as e:
@@ -827,9 +861,9 @@ def iss_loading(cfg: Config) -> bool:
             log_error(cfg, p.name, "Nome ISS Errato")
             continue
         try:
-            with ui_phase(f"{p.name} • ISS move_to_PLM"):
+            with ui_phase(f"{p.name} • ISS_To_PLM"):
                 move_to(p, cfg.PLM_DIR)
-            with ui_phase(f"{p.name} • ISS write_EDI"):
+            with ui_phase(f"{p.name} • ISS_Write_EDI"):
                 write_edi(cfg, file_name=p.name, out_dir=cfg.PLM_DIR, iss_match=m)
             log_swarky(cfg, p.name, "ISS", "ISS", "", "")
             did = True
@@ -862,11 +896,11 @@ def fiv_loading(cfg: Config) -> bool:
             log_error(cfg, p.name, "Nome FIV Errato")
             continue
         try:
-            with ui_phase(f"{p.name} • FIV map_location"):
+            with ui_phase(f"{p.name} • FIV_Map_loc"):
                 loc = map_location(m, cfg)
-            with ui_phase(f"{p.name} • FIV write_EDI"):
+            with ui_phase(f"{p.name} • FIV_Write_EDI"):
                 write_edi(cfg, m=m, file_name=p.name, loc=loc, out_dir=cfg.PLM_DIR)
-            with ui_phase(f"{p.name} • FIV move_to_PLM"):
+            with ui_phase(f"{p.name} • FIV_To_PLM"):
                 move_to(p, cfg.PLM_DIR)
             log_swarky(cfg, p.name, "FIV", "FIV loading", "", "")
             did = True
