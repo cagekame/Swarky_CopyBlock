@@ -379,7 +379,20 @@ class SwarkyApp:
         if not self._scan_plotter_disabled:
             self.refresh_plotter()
 
-    def _open_selected_plotter(self, _=None) -> None:
+    def _open_selected_plotter(self, event: Optional[tk.Event] = None) -> None:
+        index: Optional[int] = None
+        if event is not None:
+            try:
+                index = self.plotter_list.nearest(event.y)
+            except Exception:
+                index = None
+            if index is not None:
+                try:
+                    self.plotter_list.selection_clear(0, tk.END)
+                except Exception:
+                    pass
+                self.plotter_list.selection_set(index)
+
         sel = self.plotter_list.curselection()
         if not sel:
             return
